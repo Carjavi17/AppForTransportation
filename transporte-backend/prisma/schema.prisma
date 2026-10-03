@@ -1,0 +1,76 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Rol {
+  USUARIO
+  CONDUCTOR
+  CONTROLADOR
+  ADMINISTRADOR
+}
+
+enum TipoPago {
+  EFECTIVO
+  PAGO_MOVIL
+}
+
+enum EstadoViaje {
+  SOLICITADO
+  ASIGNADO
+  EN_CURSO
+  COMPLETADO
+  CANCELADO
+}
+
+model Usuario {
+  id        Int      @id @default(autoincrement())
+  nombre    String
+  telefono  String   @unique
+  password  String
+  rol       Rol      @default(USUARIO)
+  fotoUrl   String?
+  creadoEn  DateTime @default(now())
+
+  conductor         Conductor?
+  viajesSolicitados Viaje[]    @relation("ViajesDelUsuario")
+}
+
+model Conductor {
+  id        Int     @id @default(autoincrement())
+  usuarioId Int     @unique
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+  placa     String
+  unidad    String?
+  conectado Boolean @default(false)
+  latitud   Float?
+  longitud  Float?
+
+  viajes Viaje[]
+}
+
+model Viaje {
+  id               Int         @id @default(autoincrement())
+  usuarioId        Int
+  usuario          Usuario     @relation("ViajesDelUsuario", fields: [usuarioId], references: [id])
+  conductorId      Int?
+  conductor        Conductor?  @relation(fields: [conductorId], references: [id])
+  latitudOrigen    Float
+  longitudOrigen   Float
+  referenciaOrigen String?
+  pasajeros        Int         @default(1)
+  tipoPago         TipoPago
+  referenciaPago   String?
+  estado           EstadoViaje @default(SOLICITADO)
+  creadoEn         DateTime    @default(now())
+  actualizadoEn    DateTime    @updatedAt
+}
