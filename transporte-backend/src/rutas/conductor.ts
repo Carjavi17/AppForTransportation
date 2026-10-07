@@ -62,4 +62,12 @@ router.get("/viajes", async (req, res) => {
   res.json(viajes);
 });
 
+router.get("/yo", async (req, res) => {
+  const conductor = await prisma.conductor.findUnique({
+    where: { usuarioId: req.usuario!.id },
+    select: { conectado: true, placa: true, unidad: true },
+  });
+  res.json(conductor);
+});
+
 export default router;
