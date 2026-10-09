@@ -1,14 +1,15 @@
+import { mediaUrl } from "./media";
 import type {
+  AvailableDriver,
+  DispatcherTrip,
   DriverSummary,
   DriverTrip,
+  ManagedUser,
   PassengerTrip,
   PaymentType,
   Role,
   TripStatus,
   User,
-  AvailableDriver, 
-  DispatcherTrip, 
-  ManagedUser,
 } from "./types";
 
 const ROLE_FROM_API: Record<string, Role> = {
@@ -16,6 +17,13 @@ const ROLE_FROM_API: Record<string, Role> = {
   CONDUCTOR: "DRIVER",
   CONTROLADOR: "DISPATCHER",
   ADMINISTRADOR: "ADMIN",
+};
+
+const ROLE_TO_API: Record<Role, string> = {
+  PASSENGER: "USUARIO",
+  DRIVER: "CONDUCTOR",
+  DISPATCHER: "CONTROLADOR",
+  ADMIN: "ADMINISTRADOR",
 };
 
 const STATUS_FROM_API: Record<string, TripStatus> = {
@@ -42,9 +50,9 @@ const PAYMENT_FROM_API: Record<string, PaymentType> = {
 const PAYMENT_TO_API: Record<PaymentType, string> = {
   CASH: "EFECTIVO",
   MOBILE_PAYMENT: "PAGO_MOVIL",
-  
 };
 
+export const roleToApi = (role: Role) => ROLE_TO_API[role];
 export const statusToApi = (status: TripStatus) => STATUS_TO_API[status];
 export const paymentToApi = (payment: PaymentType) => PAYMENT_TO_API[payment];
 
@@ -58,7 +66,7 @@ export function mapUser(raw: any): User {
     name: raw.nombre,
     phone: raw.telefono,
     role: ROLE_FROM_API[raw.rol] ?? "PASSENGER",
-    photoUrl: raw.fotoUrl ?? null,
+    photoUrl: mediaUrl(raw.fotoUrl),
   };
 }
 
@@ -71,7 +79,7 @@ export function mapDriver(raw: any): DriverSummary {
     longitude: raw.longitud ?? null,
     name: raw.usuario.nombre,
     phone: raw.usuario.telefono,
-    photoUrl: raw.usuario.fotoUrl ?? null,
+    photoUrl: mediaUrl(raw.usuario.fotoUrl),
   };
 }
 
@@ -80,11 +88,11 @@ export function mapPassengerTrip(raw: any): PassengerTrip {
     id: raw.id,
     status: STATUS_FROM_API[raw.estado] ?? "REQUESTED",
     passengers: raw.pasajeros,
+    students: raw.estudiantes ?? 0,
     paymentType: PAYMENT_FROM_API[raw.tipoPago] ?? "CASH",
+    paymentReference: raw.referenciaPago ?? null,
     originReference: raw.referenciaOrigen ?? null,
     driver: raw.conductor ? mapDriver(raw.conductor) : null,
-    paymentReference: raw.referenciaPago ?? null,
-    students: raw.estudiantes ?? 0,
   };
 }
 
@@ -93,6 +101,7 @@ export function mapDriverTrip(raw: any): DriverTrip {
     id: raw.id,
     status: STATUS_FROM_API[raw.estado] ?? "ASSIGNED",
     passengers: raw.pasajeros,
+    students: raw.estudiantes ?? 0,
     paymentType: PAYMENT_FROM_API[raw.tipoPago] ?? "CASH",
     paymentReference: raw.referenciaPago ?? null,
     originReference: raw.referenciaOrigen ?? null,
@@ -100,33 +109,16 @@ export function mapDriverTrip(raw: any): DriverTrip {
     originLongitude: raw.longitudOrigen,
     passengerName: raw.usuario.nombre,
     passengerPhone: raw.usuario.telefono,
-    passengerPhotoUrl: raw.usuario.fotoUrl ?? null,
-    students: raw.estudiantes ?? 0,
+    passengerPhotoUrl: mediaUrl(raw.usuario.fotoUrl),
   };
 }
-
-export function mapLocationEvent(raw: any) {
-  return { driverId: raw.conductorId as number, latitude: raw.latitud as number, longitude: raw.longitud as number };
-}
-
-export function mapConnectedCount(raw: any): number {
-  return raw.conectados;
-}
-
-const ROLE_TO_API: Record<Role, string> = {
-  PASSENGER: "USUARIO",
-  DRIVER: "CONDUCTOR",
-  DISPATCHER: "CONTROLADOR",
-  ADMIN: "ADMINISTRADOR",
-};
-
-export const roleToApi = (role: Role) => ROLE_TO_API[role];
 
 export function mapDispatcherTrip(raw: any): DispatcherTrip {
   return {
     id: raw.id,
     status: STATUS_FROM_API[raw.estado] ?? "REQUESTED",
     passengers: raw.pasajeros,
+    students: raw.estudiantes ?? 0,
     paymentType: PAYMENT_FROM_API[raw.tipoPago] ?? "CASH",
     paymentReference: raw.referenciaPago ?? null,
     originReference: raw.referenciaOrigen ?? null,
@@ -135,9 +127,8 @@ export function mapDispatcherTrip(raw: any): DispatcherTrip {
     createdAt: raw.creadoEn,
     passengerName: raw.usuario.nombre,
     passengerPhone: raw.usuario.telefono,
-    passengerPhotoUrl: raw.usuario.fotoUrl ?? null,
+    passengerPhotoUrl: mediaUrl(raw.usuario.fotoUrl),
     driver: raw.conductor ? mapDriver(raw.conductor) : null,
-    students: raw.estudiantes ?? 0,
   };
 }
 
@@ -146,7 +137,7 @@ export function mapAvailableDriver(raw: any): AvailableDriver {
     ...mapDriver(raw),
     loadPassengers: (raw.viajes ?? []).reduce((sum: number, trip: any) => sum + trip.pasajeros, 0),
   };
-};
+}
 
 export function mapManagedUser(raw: any): ManagedUser {
   return {
@@ -161,4 +152,12 @@ export function mapManagedUser(raw: any): ManagedUser {
         }
       : null,
   };
+}
+
+export function mapLocationEvent(raw: any) {
+  return { driverId: raw.conductorId as number, latitude: raw.latitud as number, longitude: raw.longitud as number };
+}
+
+export function mapConnectedCount(raw: any): number {
+  return raw.conectados;
 }

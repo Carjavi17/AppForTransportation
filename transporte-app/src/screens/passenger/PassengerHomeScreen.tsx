@@ -28,7 +28,7 @@ import { InfoRow } from "../../components/InfoRow";
 import { LoadingScreen } from "../../components/LoadingScreen";
 import { Screen } from "../../components/Screen";
 import { SegmentedControl } from "../../components/SegmentedControl";
-import { SignOutButton } from "../../components/SignOutButton";
+import { HeaderActions } from "../../components/HeaderActions";
 import { Stepper } from "../../components/Stepper";
 import { TextField } from "../../components/TextField";
 import { useAuth } from "../../context/AuthContext";
@@ -212,7 +212,7 @@ export default function PassengerHomeScreen() {
         <GradientHeader
           title={`Hola, ${user.name}`}
           subtitle="¿A dónde vamos hoy?"
-          right={<SignOutButton />}
+          right={<HeaderActions />}
         />
       }
       onRefresh={load}

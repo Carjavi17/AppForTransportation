@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Text } from "react-native";
-import { assignTrip, fetchActiveTrips, fetchAvailableDrivers, unassignTrip } from "../../api/dispatch";
+import {
+  assignTrip,
+  fetchActiveTrips,
+  fetchAvailableDrivers,
+  unassignTrip,
+} from "../../api/dispatch";
 import { EVENTS } from "../../api/events";
 import type { AvailableDriver, DispatcherTrip } from "../../api/types";
 import { Banner } from "../../components/Banner";
@@ -8,7 +13,7 @@ import { Button } from "../../components/Button";
 import { GradientHeader } from "../../components/GradientHeader";
 import { LoadingScreen } from "../../components/LoadingScreen";
 import { Screen } from "../../components/Screen";
-import { SignOutButton } from "../../components/SignOutButton";
+import { HeaderActions } from "../../components/HeaderActions";
 import { useAuth } from "../../context/AuthContext";
 import { useSocket } from "../../hooks/useSocket";
 import { distanceKm } from "../../utils/geo";
@@ -35,7 +40,11 @@ export default function DispatcherHomeScreen() {
       ]);
       setTrips(activeTrips);
       setDrivers(availableDrivers);
-      setSelectedId((current) => (current !== null && activeTrips.some((t) => t.id === current) ? current : null));
+      setSelectedId((current) =>
+        current !== null && activeTrips.some((t) => t.id === current)
+          ? current
+          : null,
+      );
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -69,10 +78,17 @@ export default function DispatcherHomeScreen() {
       driver,
       km:
         selected && driver.latitude != null && driver.longitude != null
-          ? distanceKm(selected.originLatitude, selected.originLongitude, driver.latitude, driver.longitude)
+          ? distanceKm(
+              selected.originLatitude,
+              selected.originLongitude,
+              driver.latitude,
+              driver.longitude,
+            )
           : null,
     }));
-    return selected ? list.sort((a, b) => (a.km ?? Infinity) - (b.km ?? Infinity)) : list;
+    return selected
+      ? list.sort((a, b) => (a.km ?? Infinity) - (b.km ?? Infinity))
+      : list;
   }, [drivers, selected]);
 
   function toggleSelection(tripId: number) {
@@ -115,7 +131,7 @@ export default function DispatcherHomeScreen() {
         <GradientHeader
           title="Operación"
           subtitle={`${pendingTrips.length} ${pendingTrips.length === 1 ? "solicitud" : "solicitudes"} · ${drivers.length} ${drivers.length === 1 ? "conductor" : "conductores"}`}
-          right={<SignOutButton />}
+          right={<HeaderActions />}
         />
       }
       onRefresh={load}
@@ -139,14 +155,27 @@ export default function DispatcherHomeScreen() {
         </>
       ) : null}
 
-      <Text style={styles.sectionTitle}>Solicitudes nuevas ({pendingTrips.length})</Text>
-      {pendingTrips.length === 0 ? <Text style={styles.empty}>No hay solicitudes por ahora.</Text> : null}
+      <Text style={styles.sectionTitle}>
+        Solicitudes nuevas ({pendingTrips.length})
+      </Text>
+      {pendingTrips.length === 0 ? (
+        <Text style={styles.empty}>No hay solicitudes por ahora.</Text>
+      ) : null}
       {pendingTrips.map((trip) => (
-        <TripCard key={trip.id} trip={trip} selected={trip.id === selectedId} onPress={() => toggleSelection(trip.id)} />
+        <TripCard
+          key={trip.id}
+          trip={trip}
+          selected={trip.id === selectedId}
+          onPress={() => toggleSelection(trip.id)}
+        />
       ))}
 
-      <Text style={styles.sectionTitle}>Conductores conectados ({drivers.length})</Text>
-      {drivers.length === 0 ? <Text style={styles.empty}>No hay conductores conectados.</Text> : null}
+      <Text style={styles.sectionTitle}>
+        Conductores conectados ({drivers.length})
+      </Text>
+      {drivers.length === 0 ? (
+        <Text style={styles.empty}>No hay conductores conectados.</Text>
+      ) : null}
       {rankedDrivers.map(({ driver, km }) => (
         <DriverCard
           key={driver.id}
@@ -159,12 +188,22 @@ export default function DispatcherHomeScreen() {
       ))}
 
       <Text style={styles.sectionTitle}>En marcha ({ongoingTrips.length})</Text>
-      {ongoingTrips.length === 0 ? <Text style={styles.empty}>No hay viajes en marcha.</Text> : null}
+      {ongoingTrips.length === 0 ? (
+        <Text style={styles.empty}>No hay viajes en marcha.</Text>
+      ) : null}
       {ongoingTrips.map((trip) => (
-        <TripCard key={trip.id} trip={trip} selected={trip.id === selectedId} onPress={() => toggleSelection(trip.id)} />
+        <TripCard
+          key={trip.id}
+          trip={trip}
+          selected={trip.id === selectedId}
+          onPress={() => toggleSelection(trip.id)}
+        />
       ))}
       {ongoingTrips.length > 0 ? (
-        <Text style={styles.hint}>Toca un viaje para pasarlo a otro conductor o devolverlo a solicitudes.</Text>
+        <Text style={styles.hint}>
+          Toca un viaje para pasarlo a otro conductor o devolverlo a
+          solicitudes.
+        </Text>
       ) : null}
     </Screen>
   );

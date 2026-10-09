@@ -22,7 +22,7 @@ import { GradientHeader } from "../../components/GradientHeader";
 import { InfoRow } from "../../components/InfoRow";
 import { LoadingScreen } from "../../components/LoadingScreen";
 import { Screen } from "../../components/Screen";
-import { SignOutButton } from "../../components/SignOutButton";
+import { HeaderActions } from "../../components/HeaderActions";
 import { useAuth } from "../../context/AuthContext";
 import { useSocket } from "../../hooks/useSocket";
 import { colors, gradients } from "../../theme/theme";
@@ -169,7 +169,7 @@ export default function DriverHomeScreen() {
               ? `Placa ${profile.plate}${profile.unit ? ` · Unidad ${profile.unit}` : ""}`
               : ""
           }
-          right={<SignOutButton />}
+          right={<HeaderActions />}
         />
       }
       onRefresh={load}

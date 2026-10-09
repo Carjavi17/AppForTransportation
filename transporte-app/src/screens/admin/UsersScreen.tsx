@@ -19,7 +19,7 @@ import { FilterChips } from "../../components/FilterChips";
 import { GradientHeader } from "../../components/GradientHeader";
 import { LoadingScreen } from "../../components/LoadingScreen";
 import { Screen } from "../../components/Screen";
-import { SignOutButton } from "../../components/SignOutButton";
+import { HeaderActions } from "../../components/HeaderActions";
 import { useAuth } from "../../context/AuthContext";
 import { ROLE_LABEL } from "../../utils/labels";
 import { styles } from "./admin.styles";
@@ -132,7 +132,7 @@ export default function UsersScreen() {
         <GradientHeader
           title="Usuarios"
           subtitle={`${users.length} registrados`}
-          right={<SignOutButton />}
+          right={<HeaderActions />}
         />
       }
       onRefresh={load}

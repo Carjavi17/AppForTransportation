@@ -10,9 +10,15 @@ function Navigation() {
   if (loading) return <LoadingScreen />;
 
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: colors.background },
+      }}
+    >
       <Stack.Protected guard={!!user}>
         <Stack.Screen name="index" />
+        <Stack.Screen name="profile" />
       </Stack.Protected>
       <Stack.Protected guard={!user}>
         <Stack.Screen name="login" />

@@ -16,6 +16,7 @@ type AuthContextValue = {
   signIn: (phone: string, password: string) => Promise<void>;
   signUp: (name: string, phone: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  updatePhoto: (photoUrl: string | null) => void;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -61,10 +62,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
     setUser(null);
   }
+  function updatePhoto(photoUrl: string | null) {
+    setUser((current) => (current ? { ...current, photoUrl } : current));
+  }
 
   return (
     <AuthContext.Provider
-      value={{ user, token, loading, signIn, signUp, signOut }}
+      value={{ user, token, loading, signIn, signUp, signOut , updatePhoto}}
     >
       {children}
     </AuthContext.Provider>
