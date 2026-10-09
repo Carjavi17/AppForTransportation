@@ -1,16 +1,38 @@
 import { Router } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { rateLimit } from "express-rate-limit";
 import { prisma } from "../db";
 import { autenticar } from "../middleware/auth";
 
 const router = Router();
 
+const limiteLogin = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Demasiados intentos. Espera unos minutos e inténtalo de nuevo" },
+});
+
+const limiteRegistro = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Demasiados registros desde este dispositivo. Inténtalo más tarde" },
+});
+
 function crearToken(id: number, rol: string) {
   return jwt.sign({ id, rol }, process.env.JWT_SECRET!, { expiresIn: "30d" });
 }
 
-router.post("/registro", async (req, res) => {
+function datosPublicos(u: { id: number; nombre: string; telefono: string; rol: string; fotoUrl: string | null }) {
+  return { id: u.id, nombre: u.nombre, telefono: u.telefono, rol: u.rol, fotoUrl: u.fotoUrl };
+}
+
+router.post("/registro", limiteRegistro, async (req, res) => {
   const { nombre, telefono, password } = req.body ?? {};
   if (!nombre || !telefono || !password || String(password).length < 6) {
     res.status(400).json({ error: "Nombre, teléfono y contraseña (mínimo 6 caracteres) son obligatorios" });
@@ -25,13 +47,10 @@ router.post("/registro", async (req, res) => {
   const usuario = await prisma.usuario.create({
     data: { nombre, telefono, password: hash },
   });
-  res.status(201).json({
-    token: crearToken(usuario.id, usuario.rol),
-    usuario: { id: usuario.id, nombre: usuario.nombre, telefono: usuario.telefono, rol: usuario.rol, fotoUrl: usuario.fotoUrl },
-  });
+  res.status(201).json({ token: crearToken(usuario.id, usuario.rol), usuario: datosPublicos(usuario) });
 });
 
-router.post("/login", async (req, res) => {
+router.post("/login", limiteLogin, async (req, res) => {
   const { telefono, password } = req.body ?? {};
   if (!telefono || !password) {
     res.status(400).json({ error: "Teléfono y contraseña son obligatorios" });
@@ -43,10 +62,11 @@ router.post("/login", async (req, res) => {
     res.status(401).json({ error: "Teléfono o contraseña incorrectos" });
     return;
   }
-  res.json({
-    token: crearToken(usuario.id, usuario.rol),
-    usuario: { id: usuario.id, nombre: usuario.nombre, telefono: usuario.telefono, rol: usuario.rol, fotoUrl: usuario.fotoUrl },
-  });
+  if (!usuario.activo) {
+    res.status(403).json({ error: "Tu cuenta está desactivada. Comunícate con la administración" });
+    return;
+  }
+  res.json({ token: crearToken(usuario.id, usuario.rol), usuario: datosPublicos(usuario) });
 });
 
 router.get("/yo", autenticar, async (req, res) => {

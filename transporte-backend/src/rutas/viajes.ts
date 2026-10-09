@@ -1,13 +1,18 @@
 import { Router, Request } from "express";
 import { prisma } from "../db";
 import { autenticar, requiereRol } from "../middleware/auth";
-import { EstadoViaje, TipoPago } from "../generated/prisma/client";
+import { EstadoViaje, TipoPago} from "../generated/prisma/client";
 import { emitirUsuario, emitirStaff } from "../socket";
+import { contarConectados } from "../conductores";
+
 
 const router = Router();
 router.use(autenticar);
+router.get("/conectados", async (_req, res) => {
+  res.json({ conectados: await contarConectados() });
+});
 
-const ACTIVOS = [EstadoViaje.SOLICITADO, EstadoViaje.ASIGNADO, EstadoViaje.EN_CURSO];
+const ACTIVOS: EstadoViaje[] = [EstadoViaje.SOLICITADO, EstadoViaje.ASIGNADO, EstadoViaje.EN_CURSO];
 
 const datosConductor = {
   select: {
@@ -29,7 +34,7 @@ function idDe(req: Request) {
 
 // USUARIO: solicitar un viaje
 router.post("/", requiereRol("USUARIO"), async (req, res) => {
-  const { latitud, longitud, referencia, pasajeros, tipoPago, referenciaPago } = req.body ?? {};
+  const { latitud, longitud, referencia, pasajeros, tipoPago, referenciaPago, estudiantes } = req.body ?? {};
   const n = Number(pasajeros ?? 1);
 
   if (typeof latitud !== "number" || typeof longitud !== "number") {
@@ -44,10 +49,13 @@ router.post("/", requiereRol("USUARIO"), async (req, res) => {
     res.status(400).json({ error: "Tipo de pago inválido (EFECTIVO o PAGO_MOVIL)" });
     return;
   }
-  if (tipoPago === "PAGO_MOVIL" && !referenciaPago) {
-    res.status(400).json({ error: "El pago móvil necesita el número de referencia" });
+
+  const numEstudiantes = Number(estudiantes ?? 0);
+  if (!Number.isInteger(numEstudiantes) || numEstudiantes < 0 || numEstudiantes > n) {
+    res.status(400).json({ error: "Los estudiantes no pueden ser más que los pasajeros" });
     return;
   }
+  const referenciaLimpia = referenciaPago ? String(referenciaPago).trim().slice(0, 30) : "";
 
   const activo = await prisma.viaje.findFirst({
     where: { usuarioId: req.usuario!.id, estado: { in: ACTIVOS } },
@@ -65,7 +73,8 @@ router.post("/", requiereRol("USUARIO"), async (req, res) => {
       referenciaOrigen: referencia ?? null,
       pasajeros: n,
       tipoPago,
-      referenciaPago: tipoPago === "PAGO_MOVIL" ? String(referenciaPago) : null,
+      referenciaPago: tipoPago === "PAGO_MOVIL" && referenciaLimpia ? referenciaLimpia : null,
+      estudiantes: numEstudiantes,
     },
     include: { usuario: datosUsuario },
   });
@@ -148,7 +157,7 @@ router.patch("/:id/asignar", requiereRol("CONTROLADOR", "ADMINISTRADOR"), async 
     res.status(404).json({ error: "Viaje no encontrado" });
     return;
   }
-  if (viaje.estado !== "SOLICITADO" && viaje.estado !== "ASIGNADO") {
+  if (!ACTIVOS.includes(viaje.estado)) {
     res.status(409).json({ error: "Este viaje ya no se puede asignar" });
     return;
   }
@@ -157,6 +166,10 @@ router.patch("/:id/asignar", requiereRol("CONTROLADOR", "ADMINISTRADOR"), async 
     : null;
   if (!conductor || !conductor.conectado) {
     res.status(400).json({ error: "El conductor no existe o no está conectado" });
+    return;
+  }
+    if (viaje.conductor && viaje.conductor.id === conductor.id) {
+    res.status(409).json({ error: "Este viaje ya está con ese conductor" });
     return;
   }
   const actualizado = await prisma.viaje.update({
@@ -195,6 +208,73 @@ router.patch("/:id/estado", requiereRol("CONDUCTOR"), async (req, res) => {
     data: { estado: req.body.estado },
   });
   emitirUsuario(viaje.usuarioId, "viaje:actualizado", actualizado);
+  emitirStaff("viaje:actualizado", actualizado);
+  res.json(actualizado);
+});
+
+// CONTROLADOR / ADMINISTRADOR: quitar el conductor y devolver el viaje a solicitudes
+router.patch("/:id/desasignar", requiereRol("CONTROLADOR", "ADMINISTRADOR"), async (req, res) => {
+  const id = idDe(req);
+  const viaje = id
+    ? await prisma.viaje.findUnique({ where: { id }, include: { conductor: true } })
+    : null;
+  if (!viaje) {
+    res.status(404).json({ error: "Viaje no encontrado" });
+    return;
+  }
+  if (!viaje.conductor || (viaje.estado !== "ASIGNADO" && viaje.estado !== "EN_CURSO")) {
+    res.status(409).json({ error: "Este viaje no tiene conductor asignado" });
+    return;
+  }
+  const actualizado = await prisma.viaje.update({
+    where: { id: viaje.id },
+    data: { conductorId: null, estado: EstadoViaje.SOLICITADO },
+    include: { usuario: datosUsuario, conductor: datosConductor },
+  });
+  emitirUsuario(viaje.conductor.usuarioId, "viaje:cancelado", actualizado);
+  emitirUsuario(actualizado.usuarioId, "viaje:actualizado", actualizado);
+  emitirStaff("viaje:actualizado", actualizado);
+  res.json(actualizado);
+});
+
+// USUARIO: ver su último viaje completado (últimas 24 horas), para pagos pendientes
+router.get("/ultimo-completado", requiereRol("USUARIO"), async (req, res) => {
+  const desde = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const viaje = await prisma.viaje.findFirst({
+    where: { usuarioId: req.usuario!.id, estado: EstadoViaje.COMPLETADO, actualizadoEn: { gte: desde } },
+    orderBy: { actualizadoEn: "desc" },
+  });
+  res.json(viaje);
+});
+
+// USUARIO: enviar o corregir la referencia del pago móvil
+router.patch("/:id/pago", requiereRol("USUARIO"), async (req, res) => {
+  const id = idDe(req);
+  const referencia = String(req.body?.referenciaPago ?? "").trim();
+  if (!referencia || referencia.length > 30) {
+    res.status(400).json({ error: "Escribe el número de referencia (máximo 30 caracteres)" });
+    return;
+  }
+  const viaje = id
+    ? await prisma.viaje.findUnique({ where: { id }, include: { conductor: true } })
+    : null;
+  if (!viaje || viaje.usuarioId !== req.usuario!.id) {
+    res.status(404).json({ error: "Viaje no encontrado" });
+    return;
+  }
+  const reciente =
+    viaje.estado === EstadoViaje.COMPLETADO &&
+    Date.now() - viaje.actualizadoEn.getTime() < 24 * 60 * 60 * 1000;
+  if (!ACTIVOS.includes(viaje.estado) && !reciente) {
+    res.status(409).json({ error: "Este viaje ya no admite cambios de pago" });
+    return;
+  }
+  const actualizado = await prisma.viaje.update({
+    where: { id: viaje.id },
+    data: { tipoPago: TipoPago.PAGO_MOVIL, referenciaPago: referencia },
+    include: { usuario: datosUsuario, conductor: datosConductor },
+  });
+  if (viaje.conductor) emitirUsuario(viaje.conductor.usuarioId, "viaje:pago", actualizado);
   emitirStaff("viaje:actualizado", actualizado);
   res.json(actualizado);
 });

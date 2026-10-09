@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import { prisma } from "../db";
 import { Rol } from "../generated/prisma/client";
 
 export interface UsuarioToken {
@@ -15,19 +16,29 @@ declare global {
   }
 }
 
-export function autenticar(req: Request, res: Response, next: NextFunction) {
+export async function autenticar(req: Request, res: Response, next: NextFunction) {
   const header = req.headers.authorization;
   if (!header?.startsWith("Bearer ")) {
     res.status(401).json({ error: "Falta el token" });
     return;
   }
+  let datos: UsuarioToken;
   try {
-    const datos = jwt.verify(header.slice(7), process.env.JWT_SECRET!) as UsuarioToken;
-    req.usuario = { id: datos.id, rol: datos.rol };
-    next();
+    datos = jwt.verify(header.slice(7), process.env.JWT_SECRET!) as UsuarioToken;
   } catch {
     res.status(401).json({ error: "Token inválido o vencido" });
+    return;
   }
+  const u = await prisma.usuario.findUnique({
+    where: { id: datos.id },
+    select: { activo: true, rol: true },
+  });
+  if (!u || !u.activo) {
+    res.status(401).json({ error: "Cuenta desactivada o inexistente" });
+    return;
+  }
+  req.usuario = { id: datos.id, rol: u.rol };
+  next();
 }
 
 export function requiereRol(...roles: Rol[]) {

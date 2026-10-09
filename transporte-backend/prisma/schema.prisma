@@ -31,7 +31,6 @@ enum EstadoViaje {
   COMPLETADO
   CANCELADO
 }
-
 model Usuario {
   id        Int      @id @default(autoincrement())
   nombre    String
@@ -39,6 +38,7 @@ model Usuario {
   password  String
   rol       Rol      @default(USUARIO)
   fotoUrl   String?
+  activo    Boolean  @default(true)
   creadoEn  DateTime @default(now())
 
   conductor         Conductor?
@@ -68,6 +68,7 @@ model Viaje {
   longitudOrigen   Float
   referenciaOrigen String?
   pasajeros        Int         @default(1)
+  estudiantes      Int          @default(0)
   tipoPago         TipoPago
   referenciaPago   String?
   estado           EstadoViaje @default(SOLICITADO)

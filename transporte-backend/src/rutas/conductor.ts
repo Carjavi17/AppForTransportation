@@ -3,6 +3,7 @@ import { prisma } from "../db";
 import { autenticar, requiereRol } from "../middleware/auth";
 import { EstadoViaje } from "../generated/prisma/client";
 import { emitirUsuario, emitirStaff } from "../socket";
+import { avisarCantidad } from "../conductores";
 
 const router = Router();
 router.use(autenticar, requiereRol("CONDUCTOR"));
@@ -18,6 +19,7 @@ router.patch("/estado", async (req, res) => {
     select: { id: true, conectado: true },
   });
   emitirStaff("conductor:estado", conductor);
+  await avisarCantidad();
   res.json({ conectado: conductor.conectado });
 });
 

@@ -1,26 +1,22 @@
 import { Stack } from "expo-router";
-import { ActivityIndicator, View } from "react-native";
-import { AuthProvider, useAuth } from "../lib/auth";
+import { StatusBar } from "expo-status-bar";
+import { LoadingScreen } from "../components/LoadingScreen";
+import { AuthProvider, useAuth } from "../context/AuthContext";
+import { colors } from "../theme/theme";
 
-function Navegacion() {
-  const { usuario, cargando } = useAuth();
+function Navigation() {
+  const { user, loading } = useAuth();
 
-  if (cargando) {
-    return (
-      <View style={{ flex: 1, justifyContent: "center" }}>
-        <ActivityIndicator size="large" />
-      </View>
-    );
-  }
+  if (loading) return <LoadingScreen />;
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Protected guard={!!usuario}>
+    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
+      <Stack.Protected guard={!!user}>
         <Stack.Screen name="index" />
       </Stack.Protected>
-      <Stack.Protected guard={!usuario}>
+      <Stack.Protected guard={!user}>
         <Stack.Screen name="login" />
-        <Stack.Screen name="registro" />
+        <Stack.Screen name="register" />
       </Stack.Protected>
     </Stack>
   );
@@ -29,7 +25,8 @@ function Navegacion() {
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <Navegacion />
+      <StatusBar style="light" />
+      <Navigation />
     </AuthProvider>
   );
 }
