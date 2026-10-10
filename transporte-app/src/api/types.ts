@@ -31,6 +31,8 @@ export type PassengerTrip = {
   driver: DriverSummary | null;
   paymentReference: string | null;
   students: number;
+  originLatitude: number;
+  originLongitude: number;
 };
 
 export type DriverTrip = {

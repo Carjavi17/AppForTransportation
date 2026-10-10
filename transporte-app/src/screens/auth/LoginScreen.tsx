@@ -9,7 +9,7 @@ import { useAuth } from "../../context/AuthContext";
 import { styles } from "./auth.styles";
 
 export default function LoginScreen() {
-  const { signIn } = useAuth();
+  const { signIn, sessionMessage } = useAuth();
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -31,6 +31,9 @@ export default function LoginScreen() {
       title="¡Bienvenido a RutasT!"
       subtitle="Inicia sesión para pedir tu unidad"
     >
+      {sessionMessage ? (
+        <Banner tone="warning" message={sessionMessage} />
+      ) : null}
       {error ? <Banner tone="error" message={error} /> : null}
       <TextField
         label="Teléfono"

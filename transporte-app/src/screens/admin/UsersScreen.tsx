@@ -25,6 +25,7 @@ import { ROLE_LABEL } from "../../utils/labels";
 import { styles } from "./admin.styles";
 import { CreateUserForm } from "./CreateUserForm";
 import { UserCard } from "./UserCard";
+import { useAutoRefresh } from "../../hooks/useAutoRefresh";
 
 type Filter = "ALL" | Role;
 
@@ -49,6 +50,7 @@ export default function UsersScreen() {
   const load = useCallback(async () => {
     if (!token) return;
     try {
+      setError("");
       setUsers(await fetchUsers(token));
     } catch (e) {
       setError((e as Error).message);
@@ -60,6 +62,8 @@ export default function UsersScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useAutoRefresh(load);
 
   function clearMessages() {
     setNotice("");

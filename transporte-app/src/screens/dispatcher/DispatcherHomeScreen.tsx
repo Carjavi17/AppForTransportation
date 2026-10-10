@@ -20,6 +20,8 @@ import { distanceKm } from "../../utils/geo";
 import { DriverCard } from "./DriverCard";
 import { TripCard } from "./TripCard";
 import { styles } from "./dispatcher.styles";
+import { mapLocationEvent } from "../../api/mappers";
+import { useAutoRefresh } from "../../hooks/useAutoRefresh";
 
 export default function DispatcherHomeScreen() {
   const { user, token } = useAuth();
@@ -34,6 +36,7 @@ export default function DispatcherHomeScreen() {
   const load = useCallback(async () => {
     if (!token) return;
     try {
+      setError("");
       const [activeTrips, availableDrivers] = await Promise.all([
         fetchActiveTrips(token),
         fetchAvailableDrivers(token),
@@ -56,6 +59,8 @@ export default function DispatcherHomeScreen() {
     load();
   }, [load]);
 
+  useAutoRefresh(load);
+
   useSocket(token, {
     [EVENTS.tripRequested]: () => {
       setNotice("Llegó una solicitud nueva");
@@ -67,7 +72,21 @@ export default function DispatcherHomeScreen() {
     [EVENTS.driverStatus]: () => {
       load();
     },
-  });
+    [EVENTS.driverLocation]: (data) => {
+      const location = mapLocationEvent(data);
+      setDrivers((current) =>
+        current.map((driver) =>
+          driver.id === location.driverId
+            ? {
+                ...driver,
+                latitude: location.latitude,
+                longitude: location.longitude,
+              }
+            : driver,
+        ),
+      );
+    },
+  }, load);
 
   const selected = trips.find((trip) => trip.id === selectedId) ?? null;
   const pendingTrips = trips.filter((trip) => trip.status === "REQUESTED");

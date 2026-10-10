@@ -2,8 +2,13 @@ import type { ReactNode } from "react";
 import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, spacing } from "../theme/theme";
+import { ConnectionBanner } from "./ConnectionBanner";
 
-type Props = { header?: ReactNode; children: ReactNode; onRefresh?: () => void };
+type Props = {
+  header?: ReactNode;
+  children: ReactNode;
+  onRefresh?: () => void;
+};
 
 export function Screen({ header, children, onRefresh }: Props) {
   const insets = useSafeAreaInsets();
@@ -11,6 +16,7 @@ export function Screen({ header, children, onRefresh }: Props) {
   return (
     <View style={styles.container}>
       {header}
+      <ConnectionBanner />
       <ScrollView
         contentContainerStyle={[
           styles.content,
@@ -19,7 +25,11 @@ export function Screen({ header, children, onRefresh }: Props) {
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        refreshControl={onRefresh ? <RefreshControl refreshing={false} onRefresh={onRefresh} /> : undefined}
+        refreshControl={
+          onRefresh ? (
+            <RefreshControl refreshing={false} onRefresh={onRefresh} />
+          ) : undefined
+        }
       >
         {children}
       </ScrollView>

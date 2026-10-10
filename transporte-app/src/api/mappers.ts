@@ -93,6 +93,8 @@ export function mapPassengerTrip(raw: any): PassengerTrip {
     paymentReference: raw.referenciaPago ?? null,
     originReference: raw.referenciaOrigen ?? null,
     driver: raw.conductor ? mapDriver(raw.conductor) : null,
+    originLatitude: raw.latitudOrigen,
+    originLongitude: raw.longitudOrigen,
   };
 }
 

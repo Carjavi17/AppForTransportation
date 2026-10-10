@@ -28,6 +28,7 @@ import { useSocket } from "../../hooks/useSocket";
 import { colors, gradients } from "../../theme/theme";
 import { styles } from "./driver.styles";
 import { describePassengers } from "../../utils/labels";
+import { useAutoRefresh } from "../../hooks/useAutoRefresh";
 
 export default function DriverHomeScreen() {
   const { user, token } = useAuth();
@@ -37,11 +38,13 @@ export default function DriverHomeScreen() {
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+
   const gps = useRef<Location.LocationSubscription | null>(null);
 
   const load = useCallback(async () => {
     if (!token) return;
     try {
+      setError("");
       const [driverProfile, driverTrips] = await Promise.all([
         fetchDriverProfile(token),
         fetchDriverTrips(token),
@@ -59,6 +62,8 @@ export default function DriverHomeScreen() {
     load();
   }, [load]);
 
+  useAutoRefresh(load);
+
   useSocket(token, {
     [EVENTS.tripPayment]: () => {
       setNotice("Un pasajero envió su referencia de pago");
@@ -72,7 +77,7 @@ export default function DriverHomeScreen() {
       setNotice("Un pasajero canceló su viaje");
       load();
     },
-  });
+  }, load);
 
   // While connected, keep sending the driver's location
   const connected = profile?.connected ?? false;
@@ -210,7 +215,6 @@ export default function DriverHomeScreen() {
           </Text>
         </Card>
       </View>
-
       {trips.length === 0 ? (
         <Card>
           <Text style={styles.empty}>

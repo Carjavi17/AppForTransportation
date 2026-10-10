@@ -37,6 +37,9 @@ import { colors } from "../../theme/theme";
 import { PASSENGER_STATUS, describePassengers } from "../../utils/labels";
 import { PaymentSection } from "./PaymentSection";
 import { styles } from "./passenger.styles";
+import type { MapMarkerData } from "../../components/mapTypes";
+import { TripMap } from "../../components/TripMap";
+import { useAutoRefresh } from "../../hooks/useAutoRefresh";
 
 export default function PassengerHomeScreen() {
   const { user, token } = useAuth();
@@ -62,6 +65,7 @@ export default function PassengerHomeScreen() {
   const load = useCallback(async () => {
     if (!token) return;
     try {
+      setError("");
       const active = await fetchActiveTrip(token);
       setTrip(active);
       setLastTrip(active ? null : await fetchLastCompletedTrip(token));
@@ -76,6 +80,8 @@ export default function PassengerHomeScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useAutoRefresh(load);
 
   useSocket(token, {
     [EVENTS.tripAssigned]: () => {
@@ -104,7 +110,7 @@ export default function PassengerHomeScreen() {
     },
     [EVENTS.connectedCount]: (data) =>
       setConnectedDrivers(mapConnectedCount(data)),
-  });
+  }, load);
 
   async function getMyLocation() {
     setError("");
@@ -206,6 +212,31 @@ export default function PassengerHomeScreen() {
       ? lastTrip
       : null;
 
+  const mapMarkers: MapMarkerData[] = trip
+    ? [
+        {
+          id: "pickup",
+          latitude: trip.originLatitude,
+          longitude: trip.originLongitude,
+          title: "Tu punto de recogida",
+          kind: "pickup",
+        },
+        ...(trip.driver &&
+        trip.driver.latitude != null &&
+        trip.driver.longitude != null
+          ? [
+              {
+                id: "driver",
+                latitude: trip.driver.latitude,
+                longitude: trip.driver.longitude,
+                title: `Tu conductor: ${trip.driver.name}`,
+                kind: "driver" as const,
+              },
+            ]
+          : []),
+      ]
+    : [];
+
   return (
     <Screen
       header={
@@ -258,6 +289,8 @@ export default function PassengerHomeScreen() {
             );
           })()}
 
+          <TripMap markers={mapMarkers} />
+          
           <Card>
             <InfoRow
               icon="people-outline"
