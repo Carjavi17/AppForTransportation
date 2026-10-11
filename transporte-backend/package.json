@@ -5,9 +5,12 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "db:generate": "prisma generate --config prisma7.config.ts",
+    "db:deploy": "prisma migrate deploy --config prisma7.config.ts",
+    "crear-admin": "tsx scripts/crear-admin.ts",
     "pretest": "tsx tests/prepare-db.ts",
     "test": "node --import tsx --test --test-concurrency=1 \"tests/**/*.test.ts\""
-    
   },
   "keywords": [],
   "author": "",

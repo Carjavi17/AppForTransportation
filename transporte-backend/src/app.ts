@@ -1,4 +1,3 @@
-// import "express-async-errors"; // Solo si tienes Express 4 (npm install express-async-errors)
 import path from "path";
 import express from "express";
 import cors from "cors";
@@ -11,6 +10,7 @@ import perfilRutas from "./rutas/profile";
 
 export function crearApp() {
   const app = express();
+  app.set("trust proxy", 1);
   app.use(cors());
   app.use(express.json({ limit: "5mb" }));
   app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
@@ -19,7 +19,7 @@ export function crearApp() {
     res.json({ ok: true, mensaje: "API de transporte funcionando" });
   });
 
-  // Para que el servidor de producción sepa si el backend está vivo y puede hablar con la base de datos
+  // Para que Render sepa si el backend está vivo y puede hablar con la base de datos
   app.get("/health", async (_req, res) => {
     try {
       await prisma.$queryRaw`SELECT 1`;
