@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Text } from "react-native";
+import { isNetworkError } from "../../api/client";
 import {
   assignTrip,
   fetchActiveTrips,
@@ -22,6 +23,8 @@ import { TripCard } from "./TripCard";
 import { styles } from "./dispatcher.styles";
 import { mapLocationEvent } from "../../api/mappers";
 import { useAutoRefresh } from "../../hooks/useAutoRefresh";
+import { useNotificationSetup } from "../../hooks/useNotificationSetup";
+import { notify } from "../../utils/notify";
 
 export default function DispatcherHomeScreen() {
   const { user, token } = useAuth();
@@ -49,7 +52,8 @@ export default function DispatcherHomeScreen() {
           : null,
       );
     } catch (e) {
-      setError((e as Error).message);
+      // The connection banner already shows network problems
+      if (!isNetworkError(e)) setError((e as Error).message);
     } finally {
       setLoading(false);
     }
@@ -61,32 +65,39 @@ export default function DispatcherHomeScreen() {
 
   useAutoRefresh(load);
 
-  useSocket(token, {
-    [EVENTS.tripRequested]: () => {
-      setNotice("Llegó una solicitud nueva");
-      load();
+  useNotificationSetup();
+
+  const socketConnected = useSocket(
+    token,
+    {
+      [EVENTS.tripRequested]: () => {
+        setNotice("Llegó una solicitud nueva");
+        notify("Solicitud nueva", "Llegó una solicitud de viaje");
+        load();
+      },
+      [EVENTS.tripUpdated]: () => {
+        load();
+      },
+      [EVENTS.driverStatus]: () => {
+        load();
+      },
+      [EVENTS.driverLocation]: (data) => {
+        const location = mapLocationEvent(data);
+        setDrivers((current) =>
+          current.map((driver) =>
+            driver.id === location.driverId
+              ? {
+                  ...driver,
+                  latitude: location.latitude,
+                  longitude: location.longitude,
+                }
+              : driver,
+          ),
+        );
+      },
     },
-    [EVENTS.tripUpdated]: () => {
-      load();
-    },
-    [EVENTS.driverStatus]: () => {
-      load();
-    },
-    [EVENTS.driverLocation]: (data) => {
-      const location = mapLocationEvent(data);
-      setDrivers((current) =>
-        current.map((driver) =>
-          driver.id === location.driverId
-            ? {
-                ...driver,
-                latitude: location.latitude,
-                longitude: location.longitude,
-              }
-            : driver,
-        ),
-      );
-    },
-  }, load);
+    load,
+  );
 
   const selected = trips.find((trip) => trip.id === selectedId) ?? null;
   const pendingTrips = trips.filter((trip) => trip.status === "REQUESTED");
@@ -154,6 +165,7 @@ export default function DispatcherHomeScreen() {
         />
       }
       onRefresh={load}
+      socketConnected={socketConnected}
     >
       {notice ? <Banner tone="success" message={notice} /> : null}
       {error ? <Banner tone="error" message={error} /> : null}

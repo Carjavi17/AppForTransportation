@@ -116,7 +116,7 @@ router.get("/ultimo-completado", requiereRol("USUARIO"), async (req, res) => {
   res.json(viaje);
 });
 
-// USUARIO: cancelar su viaje
+// USUARIO: cancelar su viaje (solo mientras nadie lo ha tomado)
 router.patch("/:id/cancelar", requiereRol("USUARIO"), async (req, res) => {
   const id = idDe(req);
   if (!id) {
@@ -129,8 +129,12 @@ router.patch("/:id/cancelar", requiereRol("USUARIO"), async (req, res) => {
     if (!viaje || viaje.usuarioId !== req.usuario!.id) {
       return fallo(404, "Viaje no encontrado");
     }
-    if (viaje.estado !== EstadoViaje.SOLICITADO && viaje.estado !== EstadoViaje.ASIGNADO) {
-      return fallo(409, "Este viaje ya no se puede cancelar");
+    if (viaje.estado !== EstadoViaje.SOLICITADO) {
+      const mensaje =
+        viaje.estado === EstadoViaje.ASIGNADO || viaje.estado === EstadoViaje.EN_CURSO
+          ? "Ya tienes una unidad asignada, no puedes cancelar el viaje"
+          : "Este viaje ya no se puede cancelar";
+      return fallo(409, mensaje);
     }
     const actualizado = await tx.viaje.update({ where: { id }, data: { estado: EstadoViaje.CANCELADO } });
     return { ok: true as const, viaje, actualizado };
@@ -311,6 +315,15 @@ router.patch("/:id/estado", requiereRol("CONDUCTOR"), async (req, res) => {
     if (!viaje || viaje.conductor?.usuarioId !== req.usuario!.id) {
       return fallo(404, "Viaje no encontrado");
     }
+
+    // Misma petición repetida (por ejemplo, se perdió la primera respuesta): se da por hecha
+    if (
+      viaje.estado === req.body?.estado &&
+      (viaje.estado === EstadoViaje.EN_CURSO || viaje.estado === EstadoViaje.COMPLETADO)
+    ) {
+      return { ok: true as const, viaje, actualizado: viaje };
+    }
+
     const siguiente: Partial<Record<EstadoViaje, EstadoViaje>> = {
       [EstadoViaje.ASIGNADO]: EstadoViaje.EN_CURSO,
       [EstadoViaje.EN_CURSO]: EstadoViaje.COMPLETADO,

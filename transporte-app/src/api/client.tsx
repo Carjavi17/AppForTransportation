@@ -53,6 +53,9 @@ export function isNetworkError(error: unknown) {
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Gateway errors: the proxy is up but the server behind it is restarting or down
+const GATEWAY_ERRORS = [502, 503, 504];
+
 export async function request<T = any>(
   path: string,
   options: RequestOptions = {},
@@ -65,7 +68,7 @@ export async function request<T = any>(
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 10000);
     try {
-      response = await fetch(`${API_URL}${path}`, {
+      const result = await fetch(`${API_URL}${path}`, {
         method,
         headers: {
           "Content-Type": "application/json",
@@ -74,6 +77,11 @@ export async function request<T = any>(
         body: body ? JSON.stringify(body) : undefined,
         signal: controller.signal,
       });
+      if (GATEWAY_ERRORS.includes(result.status) && attempt < attempts) {
+        await wait(500 * attempt); // try again
+      } else {
+        response = result;
+      }
     } catch {
       if (attempt < attempts) await wait(500 * attempt);
     } finally {
@@ -81,7 +89,7 @@ export async function request<T = any>(
     }
   }
 
-  if (!response) {
+  if (!response || GATEWAY_ERRORS.includes(response.status)) {
     setOnline(false);
     throw new NetworkError();
   }

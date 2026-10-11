@@ -8,15 +8,17 @@ type Props = {
   header?: ReactNode;
   children: ReactNode;
   onRefresh?: () => void;
+  // Value returned by useSocket on screens that use the socket
+  socketConnected?: boolean;
 };
 
-export function Screen({ header, children, onRefresh }: Props) {
+export function Screen({ header, children, onRefresh, socketConnected }: Props) {
   const insets = useSafeAreaInsets();
 
   return (
     <View style={styles.container}>
       {header}
-      <ConnectionBanner />
+      <ConnectionBanner socketConnected={socketConnected} />
       <ScrollView
         contentContainerStyle={[
           styles.content,

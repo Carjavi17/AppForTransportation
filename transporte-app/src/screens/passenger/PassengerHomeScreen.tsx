@@ -3,6 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
 import { useCallback, useEffect, useState } from "react";
 import { Text, View } from "react-native";
+import { isNetworkError } from "../../api/client";
 import { EVENTS } from "../../api/events";
 import {
   mapConnectedCount,
@@ -40,6 +41,8 @@ import { styles } from "./passenger.styles";
 import type { MapMarkerData } from "../../components/mapTypes";
 import { TripMap } from "../../components/TripMap";
 import { useAutoRefresh } from "../../hooks/useAutoRefresh";
+import { useNotificationSetup } from "../../hooks/useNotificationSetup";
+import { notify } from "../../utils/notify";
 
 export default function PassengerHomeScreen() {
   const { user, token } = useAuth();
@@ -71,7 +74,8 @@ export default function PassengerHomeScreen() {
       setLastTrip(active ? null : await fetchLastCompletedTrip(token));
       setConnectedDrivers(await fetchConnectedDrivers(token));
     } catch (e) {
-      setError((e as Error).message);
+      // The connection banner already shows network problems
+      if (!isNetworkError(e)) setError((e as Error).message);
     } finally {
       setLoading(false);
     }
@@ -83,34 +87,43 @@ export default function PassengerHomeScreen() {
 
   useAutoRefresh(load);
 
-  useSocket(token, {
-    [EVENTS.tripAssigned]: () => {
-      setNotice("Te asignaron una unidad");
-      load();
+  useNotificationSetup();
+
+  const socketConnected = useSocket(
+    token,
+    {
+      [EVENTS.tripAssigned]: () => {
+        setNotice("Te asignaron una unidad");
+        notify("Unidad asignada", "Te asignaron una unidad");
+        load();
+      },
+      [EVENTS.tripUpdated]: (data) => {
+        if (mapStatus(data?.estado) === "COMPLETED") {
+          setNotice("Viaje completado. ¡Gracias por usar la app!");
+          notify("Viaje completado", "¡Gracias por usar la app!");
+        }
+        load();
+      },
+      [EVENTS.driverLocation]: (data) => {
+        const location = mapLocationEvent(data);
+        setTrip((current) =>
+          current?.driver
+            ? {
+                ...current,
+                driver: {
+                  ...current.driver,
+                  latitude: location.latitude,
+                  longitude: location.longitude,
+                },
+              }
+            : current,
+        );
+      },
+      [EVENTS.connectedCount]: (data) =>
+        setConnectedDrivers(mapConnectedCount(data)),
     },
-    [EVENTS.tripUpdated]: (data) => {
-      if (mapStatus(data?.estado) === "COMPLETED")
-        setNotice("Viaje completado. ¡Gracias por usar la app!");
-      load();
-    },
-    [EVENTS.driverLocation]: (data) => {
-      const location = mapLocationEvent(data);
-      setTrip((current) =>
-        current?.driver
-          ? {
-              ...current,
-              driver: {
-                ...current.driver,
-                latitude: location.latitude,
-                longitude: location.longitude,
-              },
-            }
-          : current,
-      );
-    },
-    [EVENTS.connectedCount]: (data) =>
-      setConnectedDrivers(mapConnectedCount(data)),
-  }, load);
+    load,
+  );
 
   async function getMyLocation() {
     setError("");
@@ -162,7 +175,13 @@ export default function PassengerHomeScreen() {
       setPaymentReference("");
       await load();
     } catch (e) {
-      setError((e as Error).message);
+      if (isNetworkError(e)) {
+        // The server may have created the trip even though the reply was lost.
+        // Check before letting the passenger request again.
+        await load();
+      } else {
+        setError((e as Error).message);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -176,7 +195,8 @@ export default function PassengerHomeScreen() {
       setNotice("Viaje cancelado");
       await load();
     } catch (e) {
-      setError((e as Error).message);
+      if (!isNetworkError(e)) setError((e as Error).message);
+      await load(); // muestra el estado real del viaje (por ejemplo, ya asignado)
     }
   }
 
@@ -247,6 +267,7 @@ export default function PassengerHomeScreen() {
         />
       }
       onRefresh={load}
+      socketConnected={socketConnected}
     >
       {connectedDrivers !== null ? (
         <Banner
@@ -290,7 +311,7 @@ export default function PassengerHomeScreen() {
           })()}
 
           <TripMap markers={mapMarkers} />
-          
+
           <Card>
             <InfoRow
               icon="people-outline"
@@ -335,7 +356,7 @@ export default function PassengerHomeScreen() {
             </Card>
           ) : null}
 
-          {trip.status === "REQUESTED" || trip.status === "ASSIGNED" ? (
+          {trip.status === "REQUESTED" ? (
             <Button
               label="Cancelar viaje"
               variant="danger"

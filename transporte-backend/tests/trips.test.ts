@@ -2,14 +2,58 @@ import "./setup";
 import assert from "node:assert/strict";
 import { after, beforeEach, describe, it } from "node:test";
 import request from "supertest";
-import { prisma } from "../src//db";
+import { prisma } from "../src/db";
 import { app, authHeader, createDriver, createUser, resetDb, validTrip } from "./helpers";
 
 describe("viajes", () => {
   beforeEach(resetDb);
   after(() => prisma.$disconnect());
 
-    it("cancelar y empezar el viaje a la vez: solo uno gana", async () => {
+  it("cancelar y asignar el viaje a la vez: solo uno gana", async () => {
+    const passenger = await createUser("USUARIO", "0400000001");
+    const dispatcher = await createUser("CONTROLADOR", "0400000003");
+    const { driverId } = await createDriver("0400000002", "AAA111");
+    const trip = await request(app).post("/viajes").set(authHeader(passenger)).send(validTrip);
+
+    const [cancel, assign] = await Promise.all([
+      request(app).patch(`/viajes/${trip.body.id}/cancelar`).set(authHeader(passenger)),
+      request(app)
+        .patch(`/viajes/${trip.body.id}/asignar`)
+        .set(authHeader(dispatcher))
+        .send({ conductorId: driverId }),
+    ]);
+    const winners = [cancel.status, assign.status].filter((status) => status === 200);
+    assert.equal(winners.length, 1);
+  });
+
+  it("el pasajero cancela un viaje mientras está solicitado", async () => {
+    const passenger = await createUser("USUARIO", "0400000001");
+    const trip = await request(app).post("/viajes").set(authHeader(passenger)).send(validTrip);
+
+    const res = await request(app).patch(`/viajes/${trip.body.id}/cancelar`).set(authHeader(passenger));
+    assert.equal(res.status, 200);
+    assert.equal(res.body.estado, "CANCELADO");
+  });
+
+  it("el pasajero no puede cancelar un viaje que ya tiene unidad asignada", async () => {
+    const passenger = await createUser("USUARIO", "0400000001");
+    const dispatcher = await createUser("CONTROLADOR", "0400000003");
+    const { driverId } = await createDriver("0400000002", "AAA111");
+    const trip = await request(app).post("/viajes").set(authHeader(passenger)).send(validTrip);
+    await request(app)
+      .patch(`/viajes/${trip.body.id}/asignar`)
+      .set(authHeader(dispatcher))
+      .send({ conductorId: driverId });
+
+    const res = await request(app).patch(`/viajes/${trip.body.id}/cancelar`).set(authHeader(passenger));
+    assert.equal(res.status, 409);
+    assert.equal(res.body.error, "Ya tienes una unidad asignada, no puedes cancelar el viaje");
+
+    const saved = await prisma.viaje.findUnique({ where: { id: trip.body.id } });
+    assert.equal(saved?.estado, "ASIGNADO");
+  });
+
+  it("el pasajero no puede cancelar un viaje que ya está en curso", async () => {
     const passenger = await createUser("USUARIO", "0400000001");
     const dispatcher = await createUser("CONTROLADOR", "0400000003");
     const { user: driver, driverId } = await createDriver("0400000002", "AAA111");
@@ -18,13 +62,16 @@ describe("viajes", () => {
       .patch(`/viajes/${trip.body.id}/asignar`)
       .set(authHeader(dispatcher))
       .send({ conductorId: driverId });
+    await request(app)
+      .patch(`/viajes/${trip.body.id}/estado`)
+      .set(authHeader(driver))
+      .send({ estado: "EN_CURSO" });
 
-    const [cancel, start] = await Promise.all([
-      request(app).patch(`/viajes/${trip.body.id}/cancelar`).set(authHeader(passenger)),
-      request(app).patch(`/viajes/${trip.body.id}/estado`).set(authHeader(driver)).send({ estado: "EN_CURSO" }),
-    ]);
-    const winners = [cancel.status, start.status].filter((status) => status === 200);
-    assert.equal(winners.length, 1);
+    const res = await request(app).patch(`/viajes/${trip.body.id}/cancelar`).set(authHeader(passenger));
+    assert.equal(res.status, 409);
+
+    const saved = await prisma.viaje.findUnique({ where: { id: trip.body.id } });
+    assert.equal(saved?.estado, "EN_CURSO");
   });
 
   it("un pasajero pide un viaje con civiles y estudiantes", async () => {

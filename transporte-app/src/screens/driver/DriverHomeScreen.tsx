@@ -3,6 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Linking, Pressable, Text, View } from "react-native";
+import { isNetworkError } from "../../api/client";
 import {
   advanceTrip,
   fetchDriverProfile,
@@ -29,6 +30,8 @@ import { colors, gradients } from "../../theme/theme";
 import { styles } from "./driver.styles";
 import { describePassengers } from "../../utils/labels";
 import { useAutoRefresh } from "../../hooks/useAutoRefresh";
+import { useNotificationSetup } from "../../hooks/useNotificationSetup";
+import { notify } from "../../utils/notify";
 
 export default function DriverHomeScreen() {
   const { user, token } = useAuth();
@@ -52,7 +55,8 @@ export default function DriverHomeScreen() {
       setProfile(driverProfile);
       setTrips(driverTrips);
     } catch (e) {
-      setError((e as Error).message);
+      // The connection banner already shows network problems
+      if (!isNetworkError(e)) setError((e as Error).message);
     } finally {
       setLoading(false);
     }
@@ -64,20 +68,29 @@ export default function DriverHomeScreen() {
 
   useAutoRefresh(load);
 
-  useSocket(token, {
-    [EVENTS.tripPayment]: () => {
-      setNotice("Un pasajero envió su referencia de pago");
-      load();
+  useNotificationSetup();
+
+  const socketConnected = useSocket(
+    token,
+    {
+      [EVENTS.tripPayment]: () => {
+        setNotice("Un pasajero envió su referencia de pago");
+        notify("Pago enviado", "Un pasajero envió su referencia de pago");
+        load();
+      },
+      [EVENTS.tripAssigned]: () => {
+        setNotice("Te asignaron un pasajero nuevo");
+        notify("Pasajero asignado", "Te asignaron un pasajero nuevo");
+        load();
+      },
+      [EVENTS.tripCancelled]: () => {
+        setNotice("Un pasajero canceló su viaje");
+        notify("Viaje cancelado", "Un pasajero canceló su viaje");
+        load();
+      },
     },
-    [EVENTS.tripAssigned]: () => {
-      setNotice("Te asignaron un pasajero nuevo");
-      load();
-    },
-    [EVENTS.tripCancelled]: () => {
-      setNotice("Un pasajero canceló su viaje");
-      load();
-    },
-  }, load);
+    load,
+  );
 
   // While connected, keep sending the driver's location
   const connected = profile?.connected ?? false;
@@ -150,7 +163,10 @@ export default function DriverHomeScreen() {
       if (next === "COMPLETED") setNotice("Viaje terminado");
       await load();
     } catch (e) {
-      setError((e as Error).message);
+      if (!isNetworkError(e)) setError((e as Error).message);
+      // Maybe the change went through even though the reply was lost,
+      // or the trip changed elsewhere: show its real state
+      await load();
     }
   }
 
@@ -178,6 +194,7 @@ export default function DriverHomeScreen() {
         />
       }
       onRefresh={load}
+      socketConnected={socketConnected}
     >
       <Pressable onPress={handleToggle}>
         <LinearGradient
